@@ -10,8 +10,10 @@ app = Flask(__name__)
 # --- CONFIGURATION (Paths for your data files) ---
 # ยกเลิกการใช้งาน CSV_WEB_LOG ในการเขียนไฟล์
 # CSV_WEB_LOG = 'web_log.csv'
-CSV_SCAM_LIST_SOURCE = os.path.join(os.path.dirname(__file__), 'call_scam.csv')
-CSV_OFFICIAL_LIST_SOURCE = os.path.join(os.path.dirname(__file__), 'call_official.csv')
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+CSV_SCAM_LIST_SOURCE = os.path.join(APP_ROOT, 'call_scam.csv')
+CSV_OFFICIAL_LIST_SOURCE = os.path.join(APP_ROOT, 'call_official.csv')
 
 # --- GLOBAL DATA AND LIST LOADING ---
 OFFICIAL_NUMBERS_DETAILS = {} 
@@ -27,9 +29,9 @@ def load_data_and_model():
     try:
         # **Note:** บน Render ไฟล์ทั้งหมดจะอยู่ใน Root Directory
         if os.path.exists(CSV_OFFICIAL_LIST_SOURCE):
-            df_official = pd.read_csv(CSV_OFFICIAL_LIST_SOURCE, header=None, encoding='utf-8')
+            df_official = pd.read_csv(CSV_OFFICIAL_LIST_SOURCE, encoding='utf-8') # ลบ header=None ออก
             OFFICIAL_NUMBERS_DETAILS = {
-                str(row[0]).strip(): str(row[2]).strip()
+                str(row['phone']).strip(): str(row['feedback']).strip() # เปลี่ยนเป็นชื่อ column
                 for index, row in df_official.iterrows()
             }
             print(f"Loaded {len(OFFICIAL_NUMBERS_DETAILS)} official numbers with details.")
@@ -139,8 +141,8 @@ def check_scam():
     # Return the result
     return jsonify(final_result)
 
+load_data_and_model() 
+
+
 if __name__ == '__main__':
-    with app.app_context():
-        load_data_and_model()
-        
-    app.run(debug=True)
+    app.run()
