@@ -1,9 +1,3 @@
-<<<<<<< HEAD
 Flask
 pandas
 gunicorn
-=======
-Flask
-pandas
-gunicorn
->>>>>>> 59d33332da68054428aa6fb7180cab954d4d731b
