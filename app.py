@@ -3,15 +3,34 @@ import pandas as pd
 import json
 from flask import Flask, request, jsonify, render_template
 from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy 
+from sqlalchemy import func # สำหรับใช้ func.now() ในการบันทึกเวลาปัจจุบัน
 
 # --- FLASK SETUP ---
 app = Flask(__name__)
 
+# --- DATABASE CONFIGURATION (PostgreSQL) ---
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///web_log.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# --- Define Log Model (แทนที่ web_log.csv) ---
+class LogEntry(db.Model):
+    __tablename__ = 'log_entries' # ชื่อตารางสำหรับ Log
+    id = db.Column(db.Integer, primary_key=True)
+    datetime = db.Column(db.DateTime, default=func.now()) # บันทึกเวลาปัจจุบันอัตโนมัติ
+    phone = db.Column(db.String(50), nullable=False)
+    msg = db.Column(db.String(255))
+    result = db.Column(db.String(255), nullable=False)
+    feedback = db.Column(db.String(255))
+
+
 # --- CONFIGURATION (Paths for your data files) ---
-# ยกเลิกการใช้งาน CSV_WEB_LOG ในการเขียนไฟล์
-# CSV_WEB_LOG = 'web_log.csv'
+# CSV_WEB_LOG ไม่จำเป็นต้องใช้แล้ว
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+# การโหลด CSVs ข้อมูลหลัก
 CSV_SCAM_LIST_SOURCE = os.path.join(APP_ROOT, 'call_scam.csv')
 CSV_OFFICIAL_LIST_SOURCE = os.path.join(APP_ROOT, 'call_official.csv')
 
@@ -27,11 +46,12 @@ def load_data_and_model():
     
     # 1. Load Official List
     try:
-        # **Note:** บน Render ไฟล์ทั้งหมดจะอยู่ใน Root Directory
+        # **Note:** บน Render/PA ไฟล์ทั้งหมดจะอยู่ใน Root Directory
         if os.path.exists(CSV_OFFICIAL_LIST_SOURCE):
-            df_official = pd.read_csv(CSV_OFFICIAL_LIST_SOURCE, encoding='utf-8') # ลบ header=None ออก
+            # สมมติว่าไฟล์ CSV มี header (phone, result, feedback)
+            df_official = pd.read_csv(CSV_OFFICIAL_LIST_SOURCE, encoding='utf-8')
             OFFICIAL_NUMBERS_DETAILS = {
-                str(row['phone']).strip(): str(row['feedback']).strip() # เปลี่ยนเป็นชื่อ column
+                str(row['phone']).strip(): str(row['feedback']).strip() 
                 for index, row in df_official.iterrows()
             }
             print(f"Loaded {len(OFFICIAL_NUMBERS_DETAILS)} official numbers with details.")
@@ -52,32 +72,40 @@ def load_data_and_model():
     except Exception as e:
         print(f"Error loading scammer list: {e}")
 
-    # 3. Ensure the web log file exists with headers
-    # *** COMMENTED OUT: ปิดการสร้าง Log file บน Render ***
-    # if not os.path.exists(CSV_WEB_LOG):
-    #     print(f"Creating new log file: {CSV_WEB_LOG}")
-    #     pd.DataFrame(columns=['datetime', 'phone', 'msg', 'result', 'feedback']).to_csv(CSV_WEB_LOG, index=False, encoding='utf-8')
-
+    # 3. Ensure the Log Table exists in the database
+    # การสร้างตารางต้องทำภายใต้ application context
+    try:
+        with app.app_context():
+            db.create_all()
+            print("Log database table ensured (LogEntry).")
+    except Exception as e:
+        print(f"Warning: Could not connect to database or create tables: {e}")
+        print("Running in list-only mode (Logging disabled due to DB error).")
+    
     print("--- List Load Complete ---")
 
 # --- CORE LOGIC FUNCTIONS ---
 
 def log_call(phone, msg, result):
-    """
-    Appends the call check result to the web log file. 
-    *** LOGGING IS DISABLED FOR RENDER DEPLOYMENT ***
-    """
-    # *** COMMENTED OUT: ปิดการเขียน Log file บน Render ***
-    # try:
-    #     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    #     msg_log = msg if msg else 'list check only' 
-    #     new_entry = {'datetime': now, 'phone': phone, 'msg': msg_log, 'result': result, 'feedback': 'web_check_list_only'}
-    #     
-    #     df_new = pd.DataFrame([new_entry])
-    #     df_new.to_csv(CSV_WEB_LOG, mode='a', header=False, index=False, encoding='utf-8')
-    # except Exception as e:
-    #     print(f"Error writing to log file ({CSV_WEB_LOG}): {e}")
-    pass # ใช้ pass แทน เพื่อไม่ให้โค้ดพัง
+    """Saves the call check result to the PostgreSQL database."""
+    try:
+        msg_log = msg if msg else 'list check only'
+        
+        # สร้าง Object LogEntry ใหม่
+        new_entry = LogEntry(
+            phone=phone,
+            msg=msg_log,
+            result=result,
+            feedback='web_check_list_only'
+        )
+        
+        # บันทึกเข้าฐานข้อมูล
+        db.session.add(new_entry)
+        db.session.commit()
+    except Exception as e:
+        # หากเชื่อมต่อ DB ไม่ได้หรือเกิด error ให้ทำการ rollback และไม่ให้แอปฯ พัง
+        db.session.rollback() 
+        print(f"Error writing to database log: {e}")
 
 # --- FLASK ROUTES ---
 
@@ -97,10 +125,24 @@ def view_log_page():
 # API Endpoint สำหรับดึง Log ทั้งหมด (สำหรับหน้า /log)
 @app.route('/api/logs/all')
 def get_call_log():
-    """Reads and returns the entire call log. Returns empty list on Render."""
-    # *** COMMENTED OUT: ปิดการอ่าน Log file บน Render ***
-    # เนื่องจากไฟล์ log ไม่ถาวรบน Render เราจะส่งคืนข้อมูลว่างเปล่าเสมอ เพื่อไม่ให้เกิด Error
-    return jsonify([])
+    """Reads and returns the entire call log from the database."""
+    try:
+        # Query ข้อมูลจากฐานข้อมูล
+        log_entries = LogEntry.query.order_by(LogEntry.datetime.desc()).all()
+        
+        log_data = []
+        for entry in log_entries:
+            log_data.append({
+                'datetime': entry.datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                'phone': entry.phone,
+                'msg': entry.msg,
+                'result': entry.result
+            })
+        
+        return jsonify(log_data)
+    except Exception as e:
+        print(f"Error reading call log from database: {e}")
+        return jsonify({"error": "Failed to read log data from database"}), 500
 
 # API Endpoint สำหรับการตรวจสอบ (Check)
 @app.route('/api/check', methods=['POST'])
@@ -135,14 +177,16 @@ def check_scam():
             "color": "#FFC300"
         }
 
-    # Log the result (ฟังก์ชันนี้ตอนนี้เป็นแค่ "pass")
+    # Log the result (บันทึกข้อมูลลงฐานข้อมูล)
     log_call(phone, message, final_result['result'])
     
     # Return the result
     return jsonify(final_result)
 
+# โหลดข้อมูล CSV และสร้างตาราง DB (จะรันเมื่อ Gunicorn/Render โหลดโมดูล)
 load_data_and_model() 
 
 
 if __name__ == '__main__':
+    # เมื่อรันในเครื่องตัวเอง จะสร้างไฟล์ SQLite database ขึ้นมา
     app.run()
