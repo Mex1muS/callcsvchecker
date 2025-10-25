@@ -10,8 +10,8 @@ app = Flask(__name__)
 # --- CONFIGURATION (Paths for your data files) ---
 # ยกเลิกการใช้งาน CSV_WEB_LOG ในการเขียนไฟล์
 # CSV_WEB_LOG = 'web_log.csv'
-CSV_SCAM_LIST_SOURCE = 'call_scam.csv'    
-CSV_OFFICIAL_LIST_SOURCE = 'call_official.csv'
+CSV_SCAM_LIST_SOURCE = os.path.join(os.path.dirname(__file__), 'call_scam.csv')
+CSV_OFFICIAL_LIST_SOURCE = os.path.join(os.path.dirname(__file__), 'call_official.csv')
 
 # --- GLOBAL DATA AND LIST LOADING ---
 OFFICIAL_NUMBERS_DETAILS = {} 
