@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scam Checker | Real-time Log</title>
+    <style>
+        /* --- Base Colors & Variables --- */
+        :root {
+            --bg-top: #f5f5f5;
+            --bg-bottom: #ebebeb;
+            --card-bg: #ffffff;
+            --dark-text: #1a1a1a;
+            --subtext: #666666;
+            --accent-green: #2ecc71;
+            --accent-red: #e74c3c;
+            --accent-purple: #9b59b6;
+            --accent-blue: #3498db;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-bottom);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: var(--dark-text);
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: var(--dark-text);
+            font-size: 28px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .back-button {
+            display: inline-block;
+            margin-bottom: 20px;
+            text-decoration: none;
+            color: var(--accent-blue);
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+        .back-button:hover {
+            color: #2980b9;
+        }
+        /* Log Table Style */
+        .log-table-container {
+            overflow-x: auto;
+            max-height: 70vh; /* จำกัดความสูงของตาราง */
+        }
+        #log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        #log-table th, #log-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            word-wrap: break-word;
+            max-width: 250px;
+        }
+        #log-table th {
+            background-color: #e0e0e0;
+            font-weight: bold;
+            color: var(--dark-text);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        #log-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        #log-table tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+        .footer {
+            margin-top: 20px;
+            color: var(--subtext);
+            font-size: 14px;
+            text-align: center;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: var(--subtext);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-button">← กลับหน้าหลัก</a>
+        <h1>📋 Real-time Call Log</h1>
+        <p style="color: var(--accent-red);">อัปเดตอัตโนมัติทุก 5 วินาที | แสดงผลการตรวจสอบล่าสุด</p>
+        
+        <div class="log-table-container">
+            <div id="log-content" class="loading">... กำลังโหลดบันทึก ...</div>
+        </div>
+    </div>
+
+    <p class="footer">Made with 💖 by Prant — Log Realtime</p>
+
+    <script>
+        const logContent = document.getElementById('log-content');
+        
+        async function fetchLog() {
+            try {
+                const response = await fetch('/api/logs/all');
+                const data = await response.json();
+
+                if (response.ok) {
+                    renderLogTable(data);
+                } else {
+                    logContent.innerHTML = `<p style="color: var(--accent-red);">🚨 Error: ${data.error || 'Server error'}</p>`;
+                }
+
+            } catch (error) {
+                logContent.innerHTML = `<p style="color: var(--accent-red);">🚨 Network Error: ไม่สามารถติดต่อเซิร์ฟเวอร์ได้</p>`;
+                console.error('Fetch error:', error);
+            }
+        }
+
+        function renderLogTable(logData) {
+            if (logData.length === 0) {
+                logContent.innerHTML = `<p>⚠️ ไม่มีบันทึกการตรวจสอบในขณะนี้</p>`;
+                return;
+            }
+
+            let html = `<table id="log-table">
+                <thead>
+                    <tr>
+                        <th>วัน/เวลา</th>
+                        <th>เบอร์โทรศัพท์</th>
+                        <th>ข้อความ</th>
+                        <th>ผลลัพธ์</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            logData.forEach(entry => {
+                // Shorten long messages for cleaner table view
+                const displayMessage = entry.msg && entry.msg.length > 80 ? entry.msg.substring(0, 77) + '...' : (entry.msg || '-');
+                
+                // Format timestamp
+                const timestamp = new Date(entry.datetime).toLocaleString('th-TH');
+
+                html += `<tr>
+                    <td>${timestamp}</td>
+                    <td>${entry.phone || '-'}</td>
+                    <td>${displayMessage}</td>
+                    <td>${entry.result}</td>
+                </tr>`;
+            });
+            
+            html += `</tbody></table>`;
+            logContent.innerHTML = html;
+        }
+
+        // โหลดครั้งแรก
+        fetchLog();
+
+        // ตั้งเวลาให้โหลดซ้ำทุก 5 วินาที (Real-time update)
+        setInterval(fetchLog, 5000); 
+
+    </script>
+</body>
+</html>
