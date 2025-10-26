@@ -1,8 +1,6 @@
 import os
 import pandas as pd
-import json
 from flask import Flask, request, jsonify, render_template
-from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy 
 from sqlalchemy import func # สำหรับใช้ func.now() ในการบันทึกเวลาปัจจุบัน
 
