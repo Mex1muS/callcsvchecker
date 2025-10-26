@@ -123,7 +123,16 @@
         <h1>📞 ตรวจสอบเบอร์โทรศัพท์</h1>
         <form id="check-form">
             <label for="phone">เบอร์โทรศัพท์ที่ต้องการตรวจสอบ</label>
-            <input type="text" id="phone" name="phone" placeholder="กรุณาใส่เบอร์โทรศัพท์">
+            <input 
+                type="tel" 
+                id="phone" 
+                name="phone" 
+                placeholder="กรุณาใส่เบอร์โทรศัพท์" 
+                pattern="[0-9]{3}-?[0-9]{3}-?[0-9]{4}" 
+                maxlength="10" 
+                inputmode="numeric"
+                required
+            >
             <button type="submit" id="check-button">CHECK NOW</button>
         </form>
         
